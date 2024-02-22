@@ -1,0 +1,3 @@
+[tool.black]
+line-lenght=100
+exclude= venv/
