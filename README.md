@@ -160,4 +160,4 @@ y)}\right)\]
 ##### 7) Запустить интерфецс для работы:
     python streamlit run main.py
 
-
+Copyright (c) 2024-present, - Shnyra Bogdan
