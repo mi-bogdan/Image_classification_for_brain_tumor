@@ -1,27 +1,26 @@
-import cv2
 import numpy as np
-import joblib
-from sklearn.svm import SVC
-from sklearn.preprocessing import StandardScaler
-from sklearn.cluster import KMeans
-from sklearn.pipeline import make_pipeline
-from sklearn.model_selection import train_test_split
-from sklearn.metrics import accuracy_score, recall_score, precision_score
 from skimage.io import imread
 from skimage.transform import resize
+from sklearn.model_selection import train_test_split
+from sklearn.svm import SVC
+from sklearn.pipeline import make_pipeline
+from sklearn.preprocessing import StandardScaler
+from sklearn.metrics import accuracy_score, recall_score, precision_score
 from tqdm import tqdm
 import os
+import cv2
+import joblib
 import time
-
-os.environ['LOKY_MAX_CPU_COUNT'] = '4'
+from prettytable import PrettyTable
 
 
 def load_images_and_labels(base_dir="Training"):
+    """Загрузка изображений"""
     categories = ["no_tumor", "glioma_tumor",
                   "meningioma_tumor", "pituitary_tumor"]
     images = []
     labels = []
-    count = 0  # счетчик для подсчета количества изображений
+    count = 0
 
     for label, category in enumerate(categories):
         path = os.path.join(base_dir, category)
@@ -37,7 +36,21 @@ def load_images_and_labels(base_dir="Training"):
     return np.array(images), np.array(labels), count
 
 
+def aggregate_descriptors(descriptors_list):
+    """Аггрегация дескрипторов каждого изображения с использованием среднего значения"""
+    agg_descriptors = []
+    for des in descriptors_list:
+        if des is not None:
+            agg_descriptors.append(np.mean(des, axis=0))
+        else:
+            agg_descriptors.append(np.zeros(128))
+
+    return np.array(agg_descriptors)
+
+
 def extract_sift_descriptors(images):
+    """Извлечение дескриптора SIFT"""
+
     sift = cv2.SIFT_create()
     descriptors_list = []
 
@@ -46,27 +59,15 @@ def extract_sift_descriptors(images):
         if des is not None:
             descriptors_list.append(des)
 
-    return descriptors_list
+    # Аггрегация дескрипторов каждого изображения
+    agg_descriptors = aggregate_descriptors(descriptors_list)
 
-
-def build_bovw_features(descriptors_list, n_clusters=50):
-    kmeans = KMeans(n_clusters=n_clusters)
-    all_descriptors = np.vstack(descriptors_list)
-    kmeans.fit(all_descriptors)
-    bovw_features = [kmeans.predict(des) for des in descriptors_list]
-    bovw_histograms = np.array(
-        [np.bincount(feature, minlength=n_clusters) for feature in bovw_features])
-
-    return bovw_histograms, kmeans
-
-
-def train_svm_classifier(features, labels):
-    svm_clf = make_pipeline(StandardScaler(), SVC(kernel='linear'))
-    svm_clf.fit(features, labels)
-    return svm_clf
+    return agg_descriptors
 
 
 def evaluate_model(model, X_test, y_test):
+    """Статистика по модели"""
+
     start_time = time.time()
     predictions = model.predict(X_test)
     predict_time = time.time() - start_time
@@ -78,37 +79,37 @@ def evaluate_model(model, X_test, y_test):
     return accuracy, recall, precision, predict_time
 
 
-# Загружаем изображения и метки
 images, labels, total_images_count = load_images_and_labels()
-
-# Извлекаем дескрипторы SIFT
-descriptors_list = extract_sift_descriptors(images)
-
-# Строим признаки на основе Bag of Visual Words
-bovw_features, kmeans = build_bovw_features(descriptors_list)
+agg_descriptors = extract_sift_descriptors(images)
 
 # Разделяем данные на обучающую и тестовую выборки
 X_train, X_test, y_train, y_test = train_test_split(
-    bovw_features, labels, test_size=0.3, random_state=42)
+    agg_descriptors, labels, test_size=0.3, random_state=42)
 
-# Обучаем классификатор SVM
-svm_clf = train_svm_classifier(X_train, y_train)
+# Обучение классификатора SVM
+svm_clf = make_pipeline(StandardScaler(), SVC(kernel='rbf'))
+svm_clf.fit(X_train, y_train)
 
-# Сохраняем модель и объект KMeans
+# Сохранение модели
 joblib.dump(svm_clf, 'svm_clf.joblib')
-joblib.dump(kmeans, 'kmeans.joblib')
 model_size = os.path.getsize('svm_clf.joblib') / \
     (1024 * 1024)  # Размер в Мегабайтах
 
-# Оцениваем модель на тестовом наборе
+# Оценка модели на тестовом наборе
 accuracy, recall, precision, predict_time = evaluate_model(
     svm_clf, X_test, y_test)
 
 # Выводим результаты
-print(f"Кол-во изображений для обучений: {total_images_count} шт")
-print(f"Размер модели: {model_size:.2f} MB")
-print(
-    f"Точность: {accuracy:.4f}, Полнота: {recall:.4f}, Точность предсказаний: {precision:.4f}")
-print(f"Время на предсказание: {predict_time * 1000:.2f} ms")
+table = PrettyTable()
+table.field_names = ["Параметр", "Значение"]
+
+table.add_row(["Кол-во изображений для обучений", f"{total_images_count} шт"])
+table.add_row(["Размер модели", f"{model_size:.2f} MB"])
+table.add_row(["Точность", f"{accuracy:.4f}"])
+table.add_row(["Полнота", f"{recall:.4f}"])
+table.add_row(["Точность предсказаний", f"{precision:.4f}"])
+table.add_row(["Время на предсказание", f"{predict_time * 1000:.2f} ms"])
+
+print(table)
 
 print("Модель успешно обучена и оценена")
