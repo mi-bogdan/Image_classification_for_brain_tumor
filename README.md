@@ -1,7 +1,8 @@
 <h2 align="center">Прогнозирование опухолей мозга</h2>
 
 **Ссылки**:
-- [VK](https://vk.com/id404101172)   
+- [Вконтакте](https://vk.com/id404101172) 
+- [Telegram](https://t.me/bogdan_shnyra)
 
 ## Описание
 
