@@ -41,7 +41,6 @@ def load_images_and_labels(base_dir="Training"):
 
 def aggregate_descriptors(descriptors_list):
     """Аггрегация дескрипторов каждого изображения с использованием среднего значения"""
-
     agg_descriptors = []
     for des in descriptors_list:
         if des is not None:
